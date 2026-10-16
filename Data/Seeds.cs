@@ -4,7 +4,7 @@ public class Seeds
 {
     public static readonly (Country Country, string Name, int Tier, int TeamCount, int Reputation, int AvgStadiumCapacity, int AvgStadiumQuality, int AvgYouthQuality)[] Leagues =
     [
-        (Country.Turkey, "Süper Lig", 1, 18, 6_300, 32_000, 72, 40),
+        (Country.Turkey, "Süper Lig", 1, 18, 6_300, 32_000, 72, 55),
         
         (Country.Germany, "Bundesliga", 1, 18, 8_100, 43_500, 88, 90),
         (Country.France, "Ligue 1", 1, 18, 7_500, 33_000, 75, 70),

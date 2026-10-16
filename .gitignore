@@ -16,6 +16,9 @@ mono_crash.*.json
 *.db-wal
 *.db-shm
 
+# Generated output
+output.txt
+
 # OS
 .DS_Store
 Thumbs.db

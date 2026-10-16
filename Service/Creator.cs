@@ -11,6 +11,26 @@ public class Creator
     private const int MaxReputation = 9_500;
     private const int GuaranteeLimit = 9_000;
 
+    private const int MaxRate = 10_000;
+    private const int SoftCap = 8_500;
+    private const int MinAge = 18;
+    private const int MaxAge = 34;
+    private const double StarterBonus = 1.10;
+
+    private static readonly double[] AgeFactors =
+        [0.62, 0.70, 0.78, 0.85, 0.90, 0.95, 1, 1, 1, 1, 1, 1, 0.98, 0.95, 0.92, 0.88, 0.84];
+
+    private static readonly double[] AgeRooms =
+        [1.0, 1.0, 0.8, 0.6, 0.45, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0, 0, 0, 0, 0, 0];
+
+    private static readonly Dictionary<PlayerPosition, int> Formation = new()
+    {
+        [PlayerPosition.Gk] = 1,
+        [PlayerPosition.Def] = 4,
+        [PlayerPosition.Mid] = 4,
+        [PlayerPosition.St] = 2,
+    };
+
     public static List<League> CreateLeagues(List<Country> list)
     {
         var leagues =  new List<League>();
@@ -81,13 +101,79 @@ public class Creator
             positions.Add(pool[Rng.Next(pool.Count)]);
         }
 
-        return positions.Select(pos => new Player
+        var noises = positions.Select(_ => 0.75 + 0.25 * (Rng.NextDouble() + Rng.NextDouble())).ToList();
+        double noiseMean = noises.Average();
+        double teamBase = 0.80 * team.Reputation + 200;
+
+        var players = positions.Select((pos, i) =>
         {
-            Name = NameGenerator.PlayerNameGenerate(team.Country),
-            TeamId = team.Id,
-            Position = pos,
-            CountryOfBirth = team.Country,
+            int age = GenerateAge(team.YouthCenterQuality);
+            double current = Math.Min(teamBase * AgeFactors[age - MinAge] * AcademyFactor(age, team.YouthCenterQuality) * noises[i] / noiseMean, MaxRate);
+            return new Player
+            {
+                Name = NameGenerator.PlayerNameGenerate(team.Country),
+                TeamId = team.Id,
+                Position = pos,
+                CountryOfBirth = team.Country,
+                BirthDate = DateTime.Today.AddYears(-age).AddDays(-Rng.Next(365)),
+                CurrentRate = (int)Math.Round(current),
+                PotentialRate = (int)Math.Round(CalculatePotential(current, age, team.YouthCenterQuality)),
+            };
         }).ToList();
+
+        ApplyStarterBonus(players);
+        return players;
+    }
+
+    public static int GenerateAge(int youthQuality)
+    {
+        double youngShare = 0.10 + 0.25 * youthQuality / 100.0;
+        double veteranShare = 0.18 + 0.20 * Math.Max(0, (50 - youthQuality) / 50.0);
+        double roll = Rng.NextDouble();
+
+        if (roll < youngShare)
+            return Rng.Next(18, 21);
+        if (roll < youngShare + veteranShare)
+            return Rng.Next(29, MaxAge + 1);
+        return 21 + (int)((Rng.NextDouble() + Rng.NextDouble()) / 2 * 8);
+    }
+
+    public static double AcademyFactor(int age, int youthQuality) =>
+        age <= 21 ? 1 + (youthQuality - 50) / 500.0 : 1;
+
+    public static double CalculatePotential(double current, int age, int youthQuality)
+    {
+        double room = (MaxRate - current) * AgeRooms[age - MinAge];
+        bool rare = Rng.NextDouble() < 0.003 + 0.012 * youthQuality / 100.0;
+        double u = rare
+            ? 0.6 + Rng.NextDouble() * 0.4
+            : 0.6 * Math.Pow(Rng.NextDouble(), 4 - 2.5 * youthQuality / 100.0);
+        return current + u * room;
+    }
+
+    public static void ApplyStarterBonus(List<Player> players)
+    {
+        var starters = Formation
+            .SelectMany(f => players.Where(p => p.Position == f.Key).OrderByDescending(p => p.CurrentRate).Take(f.Value))
+            .ToHashSet();
+
+        double total = players.Sum(p => (double)p.CurrentRate);
+        double starterTotal = starters.Sum(p => (double)p.CurrentRate);
+        double benchFactor = (total - StarterBonus * starterTotal) / (total - starterTotal);
+
+        foreach (var player in players)
+        {
+            double factor = starters.Contains(player) ? StarterBonus : benchFactor;
+            player.CurrentRate = ClampRate(player.CurrentRate * factor);
+            player.PotentialRate = ClampRate(player.PotentialRate * factor);
+        }
+    }
+
+    private static int ClampRate(double value)
+    {
+        if (value > SoftCap)
+            value = SoftCap + (MaxRate - SoftCap) * (1 - Math.Exp(-(value - SoftCap) / (MaxRate - SoftCap)));
+        return (int)Math.Clamp(Math.Round(value), 0, MaxRate);
     }
 
     public static int CalculateStadiumCapacity(League league, int reputation)
