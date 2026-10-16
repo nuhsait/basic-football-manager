@@ -1,0 +1,21 @@
+# .NET build output
+bin/
+obj/
+*.user
+mono_crash.*.json
+
+# IDEs
+.idea/
+.vs/
+.vscode/
+*.swp
+
+# Local databases / save files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
